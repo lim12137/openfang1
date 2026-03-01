@@ -41,104 +41,165 @@ function settingsPage() {
     verifyingChain: false,
     chainResult: null,
 
+    // Security feature definitions (with translation keys)
     coreFeatures: [
       {
-        name: 'Path Traversal Prevention', key: 'path_traversal',
-        description: 'Blocks directory escape attacks (../) in all file operations. Two-phase validation: syntactic rejection of path components, then canonicalization to normalize symlinks.',
-        threat: 'Directory escape, privilege escalation via symlinks',
+        key: 'path_traversal',
         impl: 'host_functions.rs — safe_resolve_path() + safe_resolve_parent()'
       },
       {
-        name: 'SSRF Protection', key: 'ssrf_protection',
-        description: 'Blocks outbound requests to private IPs, localhost, and cloud metadata endpoints (AWS/GCP/Azure). Validates DNS resolution results to defeat rebinding attacks.',
-        threat: 'Internal network reconnaissance, cloud credential theft',
+        key: 'ssrf_protection',
         impl: 'host_functions.rs — is_ssrf_target() + is_private_ip()'
       },
       {
-        name: 'Capability-Based Access Control', key: 'capability_system',
-        description: 'Deny-by-default permission system. Every agent operation (file I/O, network, shell, memory, spawn) requires an explicit capability grant in the manifest.',
-        threat: 'Unauthorized resource access, sandbox escape',
+        key: 'capability_system',
         impl: 'host_functions.rs — check_capability() on every host function'
       },
       {
-        name: 'Privilege Escalation Prevention', key: 'privilege_escalation_prevention',
-        description: 'When a parent agent spawns a child, the kernel enforces child capabilities are a subset of parent capabilities. No agent can grant rights it does not have.',
-        threat: 'Capability escalation through agent spawning chains',
+        key: 'privilege_escalation_prevention',
         impl: 'kernel_handle.rs — spawn_agent_checked()'
       },
       {
-        name: 'Subprocess Environment Isolation', key: 'subprocess_isolation',
-        description: 'Child processes (shell tools) inherit only a safe allow-list of environment variables. API keys, database passwords, and secrets are never leaked to subprocesses.',
-        threat: 'Secret exfiltration via child process environment',
+        key: 'subprocess_isolation',
         impl: 'subprocess_sandbox.rs — env_clear() + SAFE_ENV_VARS'
       },
       {
-        name: 'Security Headers', key: 'security_headers',
-        description: 'Every HTTP response includes CSP, X-Frame-Options: DENY, X-Content-Type-Options: nosniff, Referrer-Policy, and X-XSS-Protection headers.',
-        threat: 'XSS, clickjacking, MIME sniffing, content injection',
+        key: 'security_headers',
         impl: 'middleware.rs — security_headers()'
       },
       {
-        name: 'Wire Protocol Authentication', key: 'wire_hmac_auth',
-        description: 'Agent-to-agent OFP connections use HMAC-SHA256 mutual authentication with nonce-based handshake and constant-time signature comparison (subtle crate).',
-        threat: 'Man-in-the-middle attacks on mesh network',
+        key: 'wire_hmac_auth',
         impl: 'peer.rs — hmac_sign() + hmac_verify()'
       },
       {
-        name: 'Request ID Tracking', key: 'request_id_tracking',
-        description: 'Every API request receives a unique UUID (x-request-id header) and is logged with method, path, status code, and latency for full traceability.',
-        threat: 'Untraceable actions, forensic blind spots',
+        key: 'request_id_tracking',
         impl: 'middleware.rs — request_logging()'
       }
     ],
 
     configurableFeatures: [
       {
-        name: 'API Rate Limiting', key: 'rate_limiter',
-        description: 'GCRA (Generic Cell Rate Algorithm) with cost-aware tokens. Different endpoints cost different amounts — spawning an agent costs 50 tokens, health check costs 1.',
-        configHint: 'Hard-coded: 500 tokens/minute per IP. Edit rate_limiter.rs to tune.',
+        key: 'rate_limiter',
         valueKey: 'rate_limiter'
       },
       {
-        name: 'WebSocket Connection Limits', key: 'websocket_limits',
-        description: 'Per-IP connection cap prevents connection exhaustion. Idle timeout closes abandoned connections. Message rate limiting prevents flooding.',
-        configHint: 'Hard-coded: 5 connections/IP, 30min idle timeout, 64KB max message. Edit ws.rs to tune.',
+        key: 'websocket_limits',
         valueKey: 'websocket_limits'
       },
       {
-        name: 'WASM Dual Metering', key: 'wasm_sandbox',
-        description: 'WASM modules run with two independent resource limits: fuel metering (CPU instruction count) and epoch interruption (wall-clock timeout with watchdog thread).',
-        configHint: 'Default: 1M fuel units, 30s timeout. Configurable per-agent via SandboxConfig.',
+        key: 'wasm_sandbox',
         valueKey: 'wasm_sandbox'
       },
       {
-        name: 'Bearer Token Authentication', key: 'auth',
-        description: 'All non-health endpoints require Authorization: Bearer header. When no API key is configured, all requests are restricted to localhost only.',
-        configHint: 'Set api_key in ~/.openfang/config.toml for remote access. Empty = localhost only.',
+        key: 'auth',
         valueKey: 'auth'
       }
     ],
 
     monitoringFeatures: [
       {
-        name: 'Merkle Audit Trail', key: 'audit_trail',
-        description: 'Every security-critical action is appended to an immutable, tamper-evident log. Each entry is cryptographically linked to the previous via SHA-256 hash chain.',
-        configHint: 'Always active. Verify chain integrity from the Audit Log page.',
+        key: 'audit_trail',
         valueKey: 'audit_trail'
       },
       {
-        name: 'Information Flow Taint Tracking', key: 'taint_tracking',
-        description: 'Labels data by provenance (ExternalNetwork, UserInput, PII, Secret, UntrustedAgent) and blocks unsafe flows: external data cannot reach shell_exec, secrets cannot reach network.',
-        configHint: 'Always active. Prevents data flow attacks automatically.',
+        key: 'taint_translation',
         valueKey: 'taint_tracking'
       },
       {
-        name: 'Ed25519 Manifest Signing', key: 'manifest_signing',
-        description: 'Agent manifests can be cryptographically signed with Ed25519. Verify manifest integrity before loading to prevent supply chain tampering.',
-        configHint: 'Available for use. Sign manifests with ed25519-dalek for verification.',
+        key: 'manifest_signing',
         valueKey: 'manifest_signing'
       }
     ],
+
+    // Translation helper methods
+    getFeatureName(feature) {
+      const keyMap = {
+        'path_traversal': 'settings.security.path_traversal_prevention',
+        'ssrf_protection': 'settings.security.ssrf_protection',
+        'capability_system': 'settings.security.capability_based_access_control',
+        'privilege_escalation_prevention': 'settings.security.privilege_escalation_prevention',
+        'subprocess_isolation': 'settings.security.subprocess_environment_isolation',
+        'security_headers': 'settings.security.security_headers',
+        'wire_hmac_auth': 'settings.security.wire_protocol_authentication',
+        'request_id_tracking': 'settings.security.request_id_tracking',
+        'rate_limiter': 'settings.security.api_rate_limiting',
+        'websocket_limits': 'settings.security.websocket_limits',
+        'wasm_sandbox': 'settings.security.wasm_dual_metering',
+        'auth': 'settings.security.bearer_token_authentication',
+        'audit_trail': 'settings.security.merkle_audit_trail',
+        'taint_translation': 'settings.security.information_flow_taint_tracking',
+        'manifest_signing': 'settings.security.ed25519_manifest_signing'
+      };
+      const translationKey = keyMap[feature.key] || feature.key;
+      return typeof window.i18n !== 'undefined' ? window.i18n.t(translationKey) : feature.key;
+    },
+
+    getFeatureDescription(feature) {
+      const descKeyMap = {
+        'path_traversal': 'settings.security.path_traversal_desc',
+        'ssrf_protection': 'settings.security.ssrf_desc',
+        'capability_system': 'settings.security.capability_desc',
+        'privilege_escalation_prevention': 'settings.security.privilege_escalation_desc',
+        'subprocess_isolation': 'settings.security.subprocess_desc',
+        'security_headers': 'settings.security.security_headers_desc',
+        'wire_hmac_auth': 'settings.security.wire_auth_desc',
+        'request_id_tracking': 'settings.security.request_id_desc',
+        'rate_limiter': 'settings.security.rate_limiting_desc',
+        'websocket_limits': 'settings.security.websocket_desc',
+        'wasm_sandbox': 'settings.security.wasm_desc',
+        'auth': 'settings.security.bearer_desc',
+        'audit_trail': 'settings.security.merkle_desc',
+        'taint_translation': 'settings.security.taint_desc',
+        'manifest_signing': 'settings.security.signing_desc'
+      };
+      const translationKey = descKeyMap[feature.key] || feature.key + '_desc';
+      return typeof window.i18n !== 'undefined' ? window.i18n.t(translationKey) : '';
+    },
+
+    getFeatureThreat(feature) {
+      const threatKeyMap = {
+        'path_traversal': 'settings.security.path_traversal_threat',
+        'ssrf_protection': 'settings.security.ssrf_threat',
+        'capability_system': 'settings.security.capability_threat',
+        'privilege_escalation_prevention': 'settings.security.privilege_escalation_threat',
+        'subprocess_isolation': 'settings.security.subprocess_threat',
+        'security_headers': 'settings.security.security_headers_threat',
+        'wire_hmac_auth': 'settings.security.wire_auth_threat',
+        'request_id_tracking': 'settings.security.request_id_threat'
+      };
+      const translationKey = threatKeyMap[feature.key] || '';
+      return typeof window.i18n !== 'undefined' ? window.i18n.t(translationKey) : '';
+    },
+
+    getFeatureConfigHint(feature) {
+      const hintKeyMap = {
+        'rate_limiter': 'settings.security.rate_limiting_hint',
+        'websocket_limits': 'settings.security.websocket_hint',
+        'wasm_sandbox': 'settings.security.wasm_hint',
+        'auth': 'settings.security.bearer_hint',
+        'audit_trail': 'settings.security.merkle_hint',
+        'taint_translation': 'settings.security.taint_hint',
+        'manifest_signing': 'settings.security.signing_hint'
+      };
+      const translationKey = hintKeyMap[feature.key] || '';
+      return typeof window.i18n !== 'undefined' ? window.i18n.t(translationKey) : feature.configHint || '';
+    },
+
+    providerAuthClass(p) {
+      if (p.auth_status === 'configured') return 'auth-configured';
+      if (p.auth_status === 'not_set' || p.auth_status === 'missing') return 'auth-not-set';
+      return 'auth-no-key';
+    },
+
+    providerAuthText(p) {
+      if (p.auth_status === 'configured') {
+        return typeof window.i18n !== 'undefined' ? window.i18n.t('settings.configured') : 'Configured';
+      }
+      if (p.auth_status === 'not_set' || p.auth_status === 'missing') {
+        return typeof window.i18n !== 'undefined' ? window.i18n.t('settings.not_set') : 'Not Set';
+      }
+      return typeof window.i18n !== 'undefined' ? window.i18n.t('settings.no_key_needed') : 'No Key Needed';
+    },
 
     // -- Peers state --
     peers: [],
