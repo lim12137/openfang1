@@ -192,6 +192,8 @@ document.addEventListener('alpine:init', function() {
 function app() {
   return {
     page: 'agents',
+    language: localStorage.getItem('openfang-language') || 'en',
+    availableLanguages: OpenFangI18n ? OpenFangI18n.getSupportedLanguages() : ['en'],
     themeMode: localStorage.getItem('openfang-theme-mode') || 'system',
     theme: (() => {
       var mode = localStorage.getItem('openfang-theme-mode') || 'system';
@@ -314,6 +316,27 @@ function app() {
       this.version = store.version;
       this.agentCount = store.agentCount;
       this.wsConnected = OpenFangAPI.isWsConnected();
+    },
+
+    // Language switch methods
+    setLanguage(lang) {
+      if (OpenFangI18n) {
+        OpenFangI18n.setLanguage(lang);
+        this.language = lang;
+      }
+    },
+
+    getLanguageName(lang) {
+      var names = {
+        'en': 'English',
+        'zh-CN': '中文'
+      };
+      return names[lang] || lang;
+    },
+
+    // Translation helper
+    t(key) {
+      return OpenFangI18n ? OpenFangI18n.t(key) : key;
     }
   };
 }

@@ -32,8 +32,8 @@
       "icons/128x128@2x.png"
     ],
     "category": "Productivity",
-    "shortDescription": "Open-source Agent Operating System",
-    "longDescription": "OpenFang is an open-source Agent Operating System — run, orchestrate, and extend AI agents across every channel from your desktop.",
+    "shortDescription": "Open-source Agent Operating System / 开源代理操作系统",
+    "longDescription": "OpenFang is an open-source Agent Operating System — run, orchestrate, and extend AI agents across every channel from your desktop.\n\nOpenFang 是一个开源代理操作系统 — 在您的桌面上运行、编排和扩展跨各频道的 AI 代理。",
     "linux": {
       "deb": {
         "depends": []
